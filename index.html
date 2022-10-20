@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>wandering</title>
+  <style>
+    body {
+      padding: 0;
+      margin: 0;
+      background-image: linear-gradient(to top, #fcc5e4 0%, #fda34b 15%, #ff7882 35%, #c8699e 52%, #7046aa 71%, #0c1db8 87%, #020f75 100%);
+    }
+
+    #wandering {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      pointer-events: none;
+    }
+  </style>
+</head>
+
+<body ondblclick="setColor()">
+  <div id="wandering"></div>
+</body>
+
+<!-- 使用CDN -->
+<!-- <script src="./js/three.min.js"></script> -->
+<script src="./js/three.min.js"></script>
+<!-- <script type="text/javascript" src="./js/stats.min.js"></script> -->
+<script type="text/javascript" src="./js/stats.min.js"></script>
+<script src="./js/TrackballControls.js"></script>
+
+<script>
+
+  // 设定背景颜色（左键双击） 
+  function setColor (angle = 120) {
+    const colorStart = "#" + ("00000" + ((Math.random() * 16777215 + 0.5) >> 0).toString(16)).slice(-6);
+    const colorEnd = "#" + ("00000" + ((Math.random() * 16777215 + 0.5) >> 0).toString(16)).slice(-6);
+    document.getElementsByTagName('body')[0].style.backgroundImage = `linear-gradient(${angle}deg, ${colorStart} 0%, ${colorEnd} 100%)`
+  }
+
+  /*  实现逻辑 
+          创建精灵群:
+          分别定义随机的坐标(Y设定起始位置), 
+          渲染:
+          执行坐标变化(X+,Y-'往右下角飘落效果'), 
+          执行旋转(方向随机),
+          执行缩放,
+          执行透明度渐隐(根据初始Y轴坐标与Y轴临界坐标之间比例控制)
+          判断该精灵是否已达坐标临界值:
+          重新生成随机的各项预设值,包括坐标,X轴速度,旋转角度,大小等
+  */
+
+
+  // 变量定义
+  const MAPLE_NUMBER = 200 // 创建的精灵数
+  const maples = [] // 精灵集合,存储精灵
+  const mapleValues = [] // 精灵数值集合 ,存储坐标,旋转角度值,透明度
+  // canvas dom, 场景, 相机, 生成的精灵, 渲染器, 时钟, 控制器
+  let container, camera, scene, maple, renderer, clock, control
+
+  // 初始化
+  const init = () => {
+
+    container = document.getElementById("wandering")
+
+    // 创建相机
+    camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 1, 1500)
+    camera.position.set(0, 0, 120);
+
+    // 创建场景
+    scene = new THREE.Scene()
+    scene.position.set(0, -100, 0)
+
+    // 创建精灵
+    createMaples()
+
+    // 创建渲染器
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true })
+    renderer.setClearAlpha(0)
+    renderer.setSize(container.clientWidth, container.clientHeight)
+    container.appendChild(renderer.domElement)
+
+    clock = new THREE.Clock() // 时钟
+    control = new THREE.TrackballControls(camera)
+    control.minDistance = 10; // 最小视角
+    control.maxDistance = 800;// 最大视角 Infinity 无穷大
+
+    window.addEventListener('resize', onWindowResize, false)
+  }
+
+  // 最大值与最小值之间的随机整数
+  const randomSize = (max, min) => parseInt(Math.random() * (max - min) + min, 10)
+
+  const createRandom = () => {
+    const y = randomSize(220, 1) // 轴坐标最大值220 最小值1
+    return {
+      x: randomSize(200, -200),
+      y,
+      xSpeed: +(Math.random() * 0.3).toFixed(4), // x轴移动速度
+      scale: randomSize(15, 8), // 控制大小
+      end: (y - (40 + randomSize(15, 1))), // 结束条件 y坐标到达此处时
+      rotate: Math.random() * (0.02 - -0.02) + -0.02, // 旋转速度
+    }
+  }
+
+  const createMaples = () => {
+    // 创建精灵材质
+    const mapleMaterial = (n) => {
+      // 线上图片
+      const maple = [
+        'https://material.lishicloud.com/lishi-material/general/202208/16/8ee735e827a4435fb02cd51feda27498.png',
+        'https://material.lishicloud.com/lishi-material/general/202208/16/196e52adc66d443c85159c4379dd9c6f.png'
+      ]
+      return new THREE.SpriteMaterial({
+        depthWrite: false,
+        transparent: true,
+        // 替换线上图片
+        // map: new THREE.TextureLoader().load(`./images/maple-img${n}.png`),
+        map: new THREE.TextureLoader().load(maple[n]),
+        blending: THREE.AdditiveBlending
+      })
+    }
+    const mapleMaterial0 = mapleMaterial(0)
+    const mapleMaterial1 = mapleMaterial(1)
+
+    // 生成精灵及精灵的各项数值
+    for (let i = 0; i < MAPLE_NUMBER; i++) {
+
+      const materialClone = !Math.floor(Math.random() * (2)) ? mapleMaterial0.clone() : mapleMaterial1.clone()
+      maple = maples[i] = new THREE.Sprite(materialClone)
+
+      const { x, y, scale } = mapleValues[i] = createRandom()
+      maple.position.set(x, y, 0)
+      maple.scale.set(scale, scale, scale)
+      scene.add(maple)
+      maple = null
+    }
+  }
+
+  const onWindowResize = () => {
+    camera.aspect = container.clientWidth / container.clientHeight
+    camera.updateProjectionMatrix()
+    renderer.setSize(container.clientWidth, container.clientHeight)
+  }
+
+  const animate = () => {
+    stats.begin()
+    stats.end()
+    requestAnimationFrame(animate)
+    render()
+  }
+
+  // 性能插件,展示渲染的工作性能
+  const stats = new Stats()
+  stats.showPanel(0) // 0: fps, 1: ms, 2: mb, 3+: custom
+  document.body.appendChild(stats.dom)
+
+  const render = () => {
+
+    control.update(clock.getDelta())
+
+    for (let i = 0; i < MAPLE_NUMBER; i++) {
+      maple = maples[i]
+      const { y, end, rotate, xSpeed } = mapleValues[i]
+      const realY = maple.position.y
+      const opacity = 1 - (y - realY) / (y - end)
+
+      if (opacity > 0.8) maple.material.opacity = (1 - opacity) * 5
+      else if (opacity <= 0.4) maple.material.opacity = opacity * 2.5
+
+      maple.material.rotation += rotate
+      maple.position.x += xSpeed
+      maple.position.y -= 0.07
+      maple.scale.x = maple.scale.y = maple.scale.z -= 0.005
+
+      if (realY <= end) {
+        const v = mapleValues[i] = createRandom()
+        maple.position.set(v.x, v.y, 0)
+        maple.scale.set(v.scale, v.scale, v.scale)
+        maple.material.rotation = 0
+        maple.material.opacity = 0
+      }
+    }
+    renderer.render(scene, camera)
+  }
+
+  init()
+  animate()
+
+</script>
+
+</html>
